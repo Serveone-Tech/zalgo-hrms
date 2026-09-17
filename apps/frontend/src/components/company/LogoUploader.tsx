@@ -34,7 +34,8 @@ export function LogoUploader({ logoUrl, uploadUrl, onUploaded }: { logoUrl: stri
           {busy ? "Uploading…" : logoUrl ? "Change logo" : "Upload logo"}
         </button>
         <p className="text-xs text-muted mt-0.5">PNG, JPG, WEBP or SVG — max 2MB</p>
-        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+        {/* sr-only, not "hidden" (display:none) — iOS Safari silently ignores .click() on a display:none file input */}
+        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
       </div>
     </div>
   );

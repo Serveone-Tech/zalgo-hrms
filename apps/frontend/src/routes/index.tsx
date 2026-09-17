@@ -4,6 +4,8 @@ import { AppLayout } from "@/layouts/AppLayout";
 import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import Onboarding from "@/pages/onboarding/Onboarding";
+import Terms from "@/pages/legal/Terms";
+import Privacy from "@/pages/legal/Privacy";
 import PlatformDashboard from "@/pages/platform/Dashboard";
 import Companies from "@/pages/platform/Companies";
 import CompanyDetail from "@/pages/platform/CompanyDetail";
@@ -56,6 +58,8 @@ export function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to={user.type === "super_admin" ? "/platform" : "/app"} replace /> : <Login />} />
       <Route path="/signup" element={user ? <Navigate to={user.type === "super_admin" ? "/platform" : "/app"} replace /> : <Signup />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/platform" element={<Guard type="super_admin"><AppLayout /></Guard>}>
         <Route index element={<PlatformDashboard />} />
         <Route path="companies" element={<Companies />} />

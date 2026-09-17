@@ -59,7 +59,12 @@ export default function Signup() {
             <Field label="Company name" error={errors.companyName?.message}><input className="field" {...register("companyName")} /></Field>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-0.5" {...register("agreeTerms")} />
-              <span>I agree to the Terms of Service and Privacy Policy.</span>
+              <span>
+                I agree to the{" "}
+                <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-brand font-semibold hover:underline">Terms of Service</Link>{" "}
+                and{" "}
+                <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand font-semibold hover:underline">Privacy Policy</Link>.
+              </span>
             </label>
             {errors.agreeTerms && <p className="text-xs text-danger -mt-2">{errors.agreeTerms.message}</p>}
             {err && <p className="text-sm text-danger rounded-md bg-danger/10 px-3 py-2">{err}</p>}
