@@ -34,7 +34,7 @@ export default function Login() {
   return (
     <div className="min-h-screen grid lg:grid-cols-[1.1fr_1fr]">
       <div className="hidden lg:flex flex-col justify-between bg-side text-side-ink p-12">
-        <Logo force="dark" className="h-10" />
+        <Logo force="dark" className="h-10 self-start" />
         <div className="max-w-md">
           <h2 className="text-4xl font-extrabold leading-tight tracking-tight text-white">One workspace for every company, every branch, every punch.</h2>
           <p className="mt-4 text-side-ink/70 leading-relaxed">Multi-tenant HR platform with subscription plans, branch approvals, biometric devices and payroll — built by Zalgo Infotech.</p>

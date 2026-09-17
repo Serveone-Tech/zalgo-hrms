@@ -12,7 +12,8 @@ export function Logo({ className, mark = false, force }: { className?: string; m
   const { resolved } = useTheme();
   const mode = force ?? resolved;
   const src = mark ? "/logo_dark.png" : mode === "dark" ? "/logo_dark.png" : "/logo_light.png";
-  // self-start + shrink-0: flex containers (e.g. Login's flex-col side panel) stretch children
-  // to fill the cross-axis by default, which forced this image to full-width and squashed it.
-  return <img src={src} alt="Zalgo HRMS" className={cn("self-start shrink-0 object-contain", mark ? "h-8 w-8" : "h-9 w-auto", className)} draggable={false} />;
+  // shrink-0: prevents flex row/column containers from squashing the image below its size.
+  // Callers inside a flex-col container (e.g. Login's side panel) should also add "self-start" —
+  // it can't be baked in here since it would misalign the logo in flex-row headers (items-center).
+  return <img src={src} alt="Zalgo HRMS" className={cn("shrink-0 object-contain", mark ? "h-8 w-8" : "h-9 w-auto", className)} draggable={false} />;
 }

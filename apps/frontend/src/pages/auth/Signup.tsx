@@ -39,7 +39,7 @@ export default function Signup() {
   return (
     <div className="min-h-screen grid lg:grid-cols-[1.1fr_1fr]">
       <div className="hidden lg:flex flex-col justify-between bg-side text-side-ink p-12">
-        <Logo force="dark" className="h-10" />
+        <Logo force="dark" className="h-10 self-start" />
         <div className="max-w-md">
           <h2 className="text-4xl font-extrabold leading-tight tracking-tight text-white">Set up your HR workspace in minutes.</h2>
           <p className="mt-4 text-side-ink/70 leading-relaxed">Create your company account, pick a plan, and start managing employees, attendance and payroll today.</p>
