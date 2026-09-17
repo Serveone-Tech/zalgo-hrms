@@ -36,6 +36,12 @@ r.put("/:id", validate(schema.partial()), asyncHandler(async (req, res) => {
   if (!a) throw notFound("Add-on not found");
   audit(req, "update", "addon", a.id, b); ok(res, a, "Add-on updated");
 }));
+r.delete("/:id", asyncHandler(async (req, res) => {
+  const [a] = await db.update(subscriptionAddons).set({ isActive: false, updatedAt: new Date() }).where(eq(subscriptionAddons.id, req.params.id)).returning();
+  if (!a) throw notFound("Add-on not found");
+  audit(req, "disable", "addon", a.id);
+  ok(res, a, "Add-on disabled");
+}));
 
 // Company attach/detach
 r.get("/company/:companyId", asyncHandler(async (req, res) => {

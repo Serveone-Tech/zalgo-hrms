@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useGet, useAction } from "@/lib/queries";
 import { PageHeader, Loading, Field } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
@@ -39,8 +39,16 @@ export default function Plans() {
       {isLoading ? <Loading /> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {data?.data?.map((p) => (
-            <button key={p.id} onClick={() => openEdit(p)} className="card p-5 text-left hover:border-brand transition-colors">
-              <div className="flex items-start justify-between"><h3 className="font-extrabold text-lg">{p.name}</h3><Badge status={p.isActive ? "active" : "disabled"} /></div>
+            <div key={p.id} className="card p-5 hover:border-brand transition-colors">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-extrabold text-lg">{p.name}</h3>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Badge status={p.isActive ? "active" : "disabled"} />
+                  <button title="Edit plan" onClick={() => openEdit(p)} className="p-1 rounded text-muted hover:text-ink hover:bg-surface-2"><Pencil size={14} /></button>
+                  <button title="Delete plan" onClick={() => confirm(`Disable "${p.name}"? Existing companies keep it; it just won't be offered for new subscriptions.`) && act.mutate({ method: "delete", url: `/platform/plans/${p.id}` })}
+                    className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10"><Trash2 size={14} /></button>
+                </div>
+              </div>
               <div className="mt-2 text-2xl font-extrabold tabular-nums">{inr(p.monthlyPrice)}<span className="text-sm font-medium text-muted">/mo</span></div>
               <div className="text-xs text-muted">{inr(p.yearlyPrice)}/yr · {p.trialDays}-day trial</div>
               <dl className="mt-4 text-[13px] space-y-1">
@@ -49,7 +57,7 @@ export default function Plans() {
                 <div className="flex justify-between"><dt className="text-muted">Devices</dt><dd className="font-semibold">{p.includedDevices} <span className="text-muted font-normal">+{inr(p.additionalDevicePrice)}/extra</span></dd></div>
               </dl>
               <div className="mt-4 flex flex-wrap gap-1">{p.modules.map((m) => <span key={m} className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium">{MODULES[m as ModuleKey] ?? m}</span>)}</div>
-            </button>
+            </div>
           ))}
         </div>
       )}

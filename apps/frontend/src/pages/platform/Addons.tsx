@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useGet, useAction } from "@/lib/queries";
 import { PageHeader, Loading, Field, Empty } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
@@ -28,12 +28,20 @@ export default function Addons() {
       <PageHeader title="Add-ons" sub="Extras a company can buy on top of its plan. Attach them from a company's page." actions={<Button onClick={() => open("new")}><Plus size={16} /> New add-on</Button>} />
       {isLoading ? <Loading /> : !data?.data?.length ? <Empty text="No add-ons yet." /> : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{data.data.map((a) => (
-          <button key={a.id} onClick={() => open(a)} className="card p-4 text-left hover:border-brand transition-colors">
-            <div className="flex justify-between items-start"><h3 className="font-bold">{a.name}</h3><Badge status={a.isActive ? "active" : "disabled"} /></div>
+          <div key={a.id} className="card p-4 hover:border-brand transition-colors">
+            <div className="flex justify-between items-start gap-2">
+              <h3 className="font-bold">{a.name}</h3>
+              <div className="flex items-center gap-1 shrink-0">
+                <Badge status={a.isActive ? "active" : "disabled"} />
+                <button title="Edit add-on" onClick={() => open(a)} className="p-1 rounded text-muted hover:text-ink hover:bg-surface-2"><Pencil size={14} /></button>
+                <button title="Delete add-on" onClick={() => confirm(`Disable "${a.name}"? Companies that already have it keep it; it just won't be offered again.`) && act.mutate({ method: "delete", url: `/platform/addons/${a.id}` })}
+                  className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10"><Trash2 size={14} /></button>
+              </div>
+            </div>
             <p className="text-xs text-muted mt-0.5">{typeLabel[a.type]}{a.type === "employee_pack" || a.type === "device" ? ` · ${a.quantity} units` : ""}{a.moduleKey ? ` · ${MODULES[a.moduleKey as ModuleKey]}` : ""}</p>
             <div className="mt-3 text-lg font-extrabold">{inr(a.monthlyPrice)}<span className="text-xs text-muted font-medium">/mo</span> <span className="text-sm text-muted font-medium">· {inr(a.yearlyPrice)}/yr</span></div>
             {a.description && <p className="text-sm text-muted mt-1">{a.description}</p>}
-          </button>
+          </div>
         ))}</div>
       )}
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit === "new" ? "New add-on" : `Edit ${(edit as Addon)?.name}`}>
