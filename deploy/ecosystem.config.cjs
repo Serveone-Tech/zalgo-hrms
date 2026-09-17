@@ -5,8 +5,8 @@
 module.exports = {
   apps: [
     {
-      name: "hrms-api",
-      cwd: "/var/www/hrms/apps/backend", // uploads/ and .env are resolved relative to this
+      name: "hrms-backend",
+      cwd: "/var/www/hrms.zalgostore.com/apps/backend", // uploads/ and .env are resolved relative to this
       script: "dist/index.js",
       instances: 1, // Socket.IO needs sticky sessions to run >1 instance behind a load balancer
       exec_mode: "fork",
