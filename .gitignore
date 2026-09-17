@@ -1,0 +1,7 @@
+node_modules
+dist
+.turbo
+.env
+*.local
+apps/hardware-agent/data
+apps/backend/uploads

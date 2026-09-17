@@ -1,0 +1,26 @@
+import { Router } from "express";
+import { z } from "zod";
+import { and, eq, desc } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { automationRules, automationLogs } from "../../db/schema.js";
+import { asyncHandler, validate } from "../../common/handler.js";
+import { ok, created } from "../../common/response.js";
+import { notFound } from "../../common/errors.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { requireTenant } from "../../middleware/tenant.js";
+import { requirePermission } from "../../middleware/permission.js";
+import { audit } from "../../common/audit.js";
+import { TRIGGERS, emitEvent } from "./engine.js";
+
+const r = Router();
+r.use(requireAuth, requireTenant, requirePermission("company.settings"));
+const cid = (req: any) => req.tenant!.companyId as string;
+const schema = z.object({ name: z.string().min(2).max(120), trigger: z.enum(Object.keys(TRIGGERS) as [string, ...string[]]), conditions: z.array(z.object({ field: z.string(), op: z.enum(["eq", "neq", "gt", "gte", "lt", "lte", "contains"]), value: z.union([z.string(), z.number()]) })).default([]), actions: z.array(z.object({ type: z.enum(["notify", "email", "sms", "whatsapp", "create_ticket", "webhook"]), to: z.enum(["employee", "manager", "hr", "admins", "custom"]).default("hr"), custom: z.string().optional(), template: z.string().optional(), url: z.string().url().optional() })).min(1), isActive: z.boolean().default(true) });
+r.get("/triggers", asyncHandler(async (_req, res) => { ok(res, TRIGGERS); }));
+r.get("/", asyncHandler(async (req, res) => { ok(res, await db.select().from(automationRules).where(eq(automationRules.companyId, cid(req))).orderBy(desc(automationRules.createdAt))); }));
+r.post("/", validate(schema), asyncHandler(async (req, res) => { const [row] = await db.insert(automationRules).values({ ...(req.body as any), companyId: cid(req) }).returning(); audit(req, "create", "automation_rule", row.id, { name: row.name }); created(res, row, "Rule created"); }));
+r.put("/:id", validate(schema.partial()), asyncHandler(async (req, res) => { const [row] = await db.update(automationRules).set({ ...(req.body as any), updatedAt: new Date() }).where(and(eq(automationRules.id, req.params.id), eq(automationRules.companyId, cid(req)))).returning(); if (!row) throw notFound("Rule not found"); audit(req, "update", "automation_rule", row.id); ok(res, row, "Rule updated"); }));
+r.delete("/:id", asyncHandler(async (req, res) => { const [row] = await db.delete(automationRules).where(and(eq(automationRules.id, req.params.id), eq(automationRules.companyId, cid(req)))).returning(); if (!row) throw notFound("Rule not found"); audit(req, "delete", "automation_rule", row.id); ok(res, null, "Rule deleted"); }));
+r.get("/:id/logs", asyncHandler(async (req, res) => { ok(res, await db.select().from(automationLogs).where(and(eq(automationLogs.ruleId, req.params.id), eq(automationLogs.companyId, cid(req)))).orderBy(desc(automationLogs.createdAt)).limit(50)); }));
+r.post("/:id/test", asyncHandler(async (req, res) => { const [rule] = await db.select().from(automationRules).where(and(eq(automationRules.id, req.params.id), eq(automationRules.companyId, cid(req)))).limit(1); if (!rule) throw notFound("Rule not found"); emitEvent(rule.trigger, { companyId: cid(req), ...(req.body ?? {}), test: true, lateMinutes: 25, lateCountThisMonth: 4, days: 3, amount: 5000, daysLeft: 7 }); ok(res, null, "Test event queued — check the rule's log in a few seconds"); }));
+export default r;

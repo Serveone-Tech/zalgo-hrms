@@ -1,0 +1,71 @@
+import { Router } from "express";
+import auth from "./modules/auth/auth.routes.js";
+import platform from "./modules/platform/platform.routes.js";
+import companies from "./modules/companies/companies.routes.js";
+import companySelf from "./modules/companies/company-self.routes.js";
+import publicLogos from "./modules/companies/public-logos.routes.js";
+import onboardingRouter from "./modules/onboarding/onboarding.routes.js";
+import paymentsRouter from "./modules/payments/payments.routes.js";
+import plans from "./modules/plans/plans.routes.js";
+import subscriptions from "./modules/subscriptions/subscriptions.routes.js";
+import branches from "./modules/branches/branches.routes.js";
+import roles from "./modules/roles/roles.routes.js";
+import users from "./modules/users/users.routes.js";
+import audit from "./modules/audit/audit.routes.js";
+import addons from "./modules/subscriptions/addons.routes.js";
+import invoices from "./modules/subscriptions/invoices.routes.js";
+import employeesRouter, { filesRouter } from "./modules/employees/employees.routes.js";
+import departments from "./modules/departments/departments.routes.js";
+import designations from "./modules/designations/designations.routes.js";
+import shiftsRouter from "./modules/shifts/shifts.routes.js";
+import attendanceRouter from "./modules/attendance/attendance.routes.js";
+import devicesRouter from "./modules/devices/devices.routes.js";
+import agentRouter from "./modules/devices/agent.routes.js";
+import leavesRouter from "./modules/leaves/leaves.routes.js";
+import payrollRouter from "./modules/payroll/payroll.routes.js";
+import expensesRouter from "./modules/expenses/expenses.routes.js";
+import recruitmentRouter from "./modules/recruitment/recruitment.routes.js";
+import performanceRouter from "./modules/performance/performance.routes.js";
+import helpdeskRouter from "./modules/helpdesk/helpdesk.routes.js";
+import announcementsRouter from "./modules/announcements/announcements.routes.js";
+import notificationsRouter from "./modules/notifications/notifications.routes.js";
+import automationRouter from "./modules/automation/automation.routes.js";
+import reportsRouter from "./modules/reports/reports.routes.js";
+import aiRouter from "./modules/ai/ai.routes.js";
+
+// Section 113: versioned API
+export const apiV1 = Router();
+apiV1.use("/auth", auth);
+apiV1.use("/platform", platform);
+apiV1.use("/platform/plans", plans);
+apiV1.use("/companies", companies);        // super admin
+apiV1.use("/company", companySelf);        // company admin (self)
+apiV1.use("/public/logos", publicLogos);   // unauthenticated — company logos only
+apiV1.use("/onboarding", onboardingRouter);
+apiV1.use("/payments", paymentsRouter);
+apiV1.use("/subscriptions", subscriptions);
+apiV1.use("/platform/addons", addons);
+apiV1.use("/invoices", invoices);
+apiV1.use("/branches", branches);
+apiV1.use("/roles", roles);
+apiV1.use("/users", users);
+apiV1.use("/audit-logs", audit);
+apiV1.use("/employees/files", filesRouter);
+apiV1.use("/employees", employeesRouter);
+apiV1.use("/departments", departments);
+apiV1.use("/designations", designations);
+apiV1.use("/shifts", shiftsRouter);
+apiV1.use("/attendance", attendanceRouter);
+apiV1.use("/devices/agent", agentRouter); // hardware agent (x-agent-key)
+apiV1.use("/devices", devicesRouter);
+apiV1.use("/leaves", leavesRouter);
+apiV1.use("/payroll", payrollRouter);
+apiV1.use("/expenses", expensesRouter);
+apiV1.use("/recruitment", recruitmentRouter);
+apiV1.use("/performance", performanceRouter);
+apiV1.use("/helpdesk", helpdeskRouter);
+apiV1.use("/announcements", announcementsRouter);
+apiV1.use("/notifications", notificationsRouter);
+apiV1.use("/automation", automationRouter);
+apiV1.use("/reports", reportsRouter);
+apiV1.use("/ai", aiRouter);

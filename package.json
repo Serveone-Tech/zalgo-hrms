@@ -1,0 +1,21 @@
+{
+  "name": "hrms-saas",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "db:push": "pnpm --filter @hrms/backend db:push",
+    "db:seed": "pnpm --filter @hrms/backend db:seed",
+    "db:studio": "pnpm --filter @hrms/backend db:studio",
+    "db:migrate": "pnpm --filter @hrms/backend db:migrate",
+    "db:generate": "pnpm --filter @hrms/backend db:generate",
+    "start": "pnpm --filter @hrms/backend start"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
+  }
+}

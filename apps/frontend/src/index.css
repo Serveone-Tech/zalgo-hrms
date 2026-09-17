@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Design tokens (HSL triplets). Brand color change karna ho to sirf --brand badlo. ---- */
+:root {
+  --bg: 160 12% 97%;
+  --surface: 0 0% 100%;
+  --surface-2: 160 10% 94%;
+  --line: 160 8% 87%;
+  --ink: 168 20% 11%;
+  --muted: 168 8% 42%;
+  --brand: 186 81% 29%;
+  --brand-ink: 0 0% 100%;
+  --brand-soft: 186 60% 92%;
+  --danger: 4 72% 50%;
+  --warn: 34 90% 44%;
+  --good: 152 60% 34%;
+  --side: 168 20% 8%;
+  --side-ink: 160 15% 88%;
+}
+.dark {
+  --bg: 168 18% 7%;
+  --surface: 168 14% 11%;
+  --surface-2: 168 12% 15%;
+  --line: 168 10% 20%;
+  --ink: 160 18% 93%;
+  --muted: 160 8% 60%;
+  --brand: 186 62% 48%;
+  --brand-ink: 168 18% 7%;
+  --brand-soft: 186 40% 16%;
+  --danger: 4 78% 62%;
+  --warn: 34 90% 58%;
+  --good: 152 55% 50%;
+  --side: 168 22% 5%;
+  --side-ink: 160 15% 85%;
+}
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+body { @apply bg-bg text-ink font-sans antialiased; }
+*:focus-visible { @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-bg; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+.label { @apply block text-[13px] font-semibold text-muted mb-1.5; }
+.field { @apply w-full h-10 rounded-md border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted/70 transition-colors focus:border-brand; }
+select.field { @apply pr-8; }
+textarea.field { @apply h-auto py-2; }
+.card { @apply bg-surface border border-line rounded-lg; }
+.th { @apply text-left text-[12px] font-semibold text-muted py-2.5 px-3 border-b border-line; }
+.td { @apply py-3 px-3 text-sm border-b border-line/70 align-middle; }
