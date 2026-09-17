@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import type { StatusResponse } from "../onboarding.types";
 
 export const PLAN_SESSION_KEY = "onboarding-plan-choice";
 
-export function PlanStep({ status }: { status: StatusResponse }) {
+export function PlanStep({ status, onBack, onAdvance }: { status: StatusResponse; onBack: () => void; onAdvance: () => void }) {
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<string | null>(status.plans[0]?.id ?? null);
   const [busy, setBusy] = useState<"trial" | "pay" | null>(null);
@@ -26,6 +26,7 @@ export function PlanStep({ status }: { status: StatusResponse }) {
     setBusy("trial");
     try {
       await api.post("/onboarding/choose-plan", { planId: plan.id, billingCycle: cycle, startTrial: true });
+      onAdvance();
       qc.invalidateQueries({ queryKey: ["onboarding-status"] });
     } catch (e) { toast(errMsg(e), "error"); } finally { setBusy(null); }
   }
@@ -34,12 +35,13 @@ export function PlanStep({ status }: { status: StatusResponse }) {
     sessionStorage.setItem(PLAN_SESSION_KEY, JSON.stringify({ planId: plan.id, billingCycle: cycle }));
     setBusy("pay");
     api.post("/onboarding/choose-plan", { planId: plan.id, billingCycle: cycle, startTrial: false })
-      .then(() => qc.invalidateQueries({ queryKey: ["onboarding-status"] }))
+      .then(() => { onAdvance(); qc.invalidateQueries({ queryKey: ["onboarding-status"] }); })
       .catch((e) => toast(errMsg(e), "error")).finally(() => setBusy(null));
   }
 
   return (
     <div className="card p-6">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink mb-4"><ArrowLeft size={14} /> Back to company profile</button>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div><h2 className="text-lg font-bold">Choose a plan</h2><p className="text-sm text-muted mt-1">You can change this anytime from Subscription.</p></div>
         <div className="inline-flex rounded-md border border-line p-0.5 text-sm">

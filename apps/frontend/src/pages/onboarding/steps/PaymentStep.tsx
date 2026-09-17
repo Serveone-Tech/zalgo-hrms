@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Loading } from "@/components/ui/page";
 import { payWithRazorpay, type RazorpayOrder } from "@/lib/razorpay";
 import { inr } from "@/lib/utils";
 import type { ApiResponse } from "@hrms/shared-types";
 import type { StatusResponse } from "../onboarding.types";
-import { PlanStep, PLAN_SESSION_KEY } from "./PlanStep";
+import { PLAN_SESSION_KEY } from "./PlanStep";
 
-export function PaymentStep({ status }: { status: StatusResponse }) {
+export function PaymentStep({ status, onBack }: { status: StatusResponse; onBack: () => void }) {
   const stored = sessionStorage.getItem(PLAN_SESSION_KEY);
   const choice = stored ? (JSON.parse(stored) as { planId: string; billingCycle: "monthly" | "yearly" }) : null;
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +18,9 @@ export function PaymentStep({ status }: { status: StatusResponse }) {
   const [done, setDone] = useState(false);
   const qc = useQueryClient();
 
-  if (!choice) return <PlanStep status={status} />; // no order pending in this browser session — let them re-pick
+  // No order pending in this browser session (e.g. page reload) — send them back to re-pick a plan.
+  useEffect(() => { if (!choice) onBack(); }, [choice, onBack]);
+  if (!choice) return <Loading />;
 
   const plan = status.plans.find((p) => p.id === choice.planId);
   const subtotal = plan ? Number(choice.billingCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice) : 0;
@@ -48,6 +51,7 @@ export function PaymentStep({ status }: { status: StatusResponse }) {
 
   return (
     <div className="card p-6 max-w-md mx-auto text-center">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink mb-4"><ArrowLeft size={14} /> Back to plans</button>
       <h2 className="text-lg font-bold">Complete your payment</h2>
       <p className="text-sm text-muted mt-1">Secure checkout via Razorpay.</p>
       <div className="mt-5 rounded-lg border border-line p-4 text-sm text-left">

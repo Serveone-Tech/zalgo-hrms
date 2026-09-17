@@ -32,3 +32,22 @@ export type HeadOfficeForm = z.infer<typeof headOfficeSchema>;
 
 export const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"] as const;
 export const INDUSTRIES = ["IT / Software", "Manufacturing", "Retail", "Healthcare", "Education", "Finance", "Logistics", "Hospitality", "Construction", "Other"];
+
+// Stricter variant for the self-service onboarding wizard — a real signup must give us
+// real business details before choosing a plan. The Super Admin form above stays lenient.
+export const onboardingCompanyProfileSchema = companyProfileSchema.extend({
+  industry: z.string().min(1, "Select an industry"),
+  companySize: z.enum(COMPANY_SIZES, { errorMap: () => ({ message: "Select a company size" }) }),
+  email: z.string().email("A valid email is required"),
+  mobile: z.string().min(6, "Mobile number is required"),
+  address: z.string().min(1, "Address is required"),
+  state: z.string().min(1, "State is required"),
+  city: z.string().min(1, "City is required"),
+  pinCode: z.string().min(4, "PIN code is required"),
+});
+export const onboardingHeadOfficeSchema = headOfficeSchema.extend({
+  address: z.string().min(1, "Address is required"),
+  state: z.string().min(1, "State is required"),
+  city: z.string().min(1, "City is required"),
+  pinCode: z.string().min(4, "PIN code is required"),
+});

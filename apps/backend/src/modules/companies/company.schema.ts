@@ -32,7 +32,23 @@ export const headOfficeSchema = z.object({
 });
 export type HeadOfficeInput = z.infer<typeof headOfficeSchema>;
 
+// Self-service signups must give us real business details before they can pick a plan —
+// the Super Admin form above stays lenient (they may create placeholder companies).
 export const onboardingProfileSchema = z.object({
-  company: companyProfileSchema,
-  headOffice: headOfficeSchema,
+  company: companyProfileSchema.extend({
+    industry: z.string().min(1, "Industry is required"),
+    companySize: z.enum(["1-10", "11-50", "51-200", "201-500", "500+"], { errorMap: () => ({ message: "Select a company size" }) }),
+    email: z.string().email("A valid email is required"),
+    mobile: z.string().min(6, "Mobile number is required"),
+    address: z.string().min(1, "Address is required"),
+    state: z.string().min(1, "State is required"),
+    city: z.string().min(1, "City is required"),
+    pinCode: z.string().min(4, "PIN code is required"),
+  }),
+  headOffice: headOfficeSchema.extend({
+    address: z.string().min(1, "Address is required"),
+    state: z.string().min(1, "State is required"),
+    city: z.string().min(1, "City is required"),
+    pinCode: z.string().min(4, "PIN code is required"),
+  }),
 });

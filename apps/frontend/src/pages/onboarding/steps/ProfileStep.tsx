@@ -6,13 +6,13 @@ import { useAction } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { CompanyProfileForm } from "@/components/company/CompanyProfileForm";
 import { LogoUploader } from "@/components/company/LogoUploader";
-import { companyProfileSchema, headOfficeSchema } from "@/lib/companySchema";
+import { onboardingCompanyProfileSchema, onboardingHeadOfficeSchema } from "@/lib/companySchema";
 import type { StatusResponse } from "../onboarding.types";
 
-const schema = z.object({ company: companyProfileSchema, headOffice: headOfficeSchema });
+const schema = z.object({ company: onboardingCompanyProfileSchema, headOffice: onboardingHeadOfficeSchema });
 type Form = z.infer<typeof schema>;
 
-export function ProfileStep({ status }: { status: StatusResponse }) {
+export function ProfileStep({ status, onSaved }: { status: StatusResponse; onSaved: () => void }) {
   const qc = useQueryClient();
   const act = useAction<Form>([["onboarding-status"]]);
   const c = status.company; const ho = status.headOffice;
@@ -20,7 +20,7 @@ export function ProfileStep({ status }: { status: StatusResponse }) {
     resolver: zodResolver(schema),
     defaultValues: {
       company: {
-        name: c.name, slug: c.slug, industry: c.industry ?? "", companySize: (c.companySize ?? "") as Form["company"]["companySize"],
+        name: c.name, slug: c.slug, industry: c.industry ?? "", companySize: (c.companySize || undefined) as Form["company"]["companySize"],
         email: c.email ?? "", mobile: c.mobile ?? "", website: c.website ?? "", gstNumber: c.gstNumber ?? "", panNumber: c.panNumber ?? "",
         address: c.address ?? "", country: c.country, state: c.state ?? "", city: c.city ?? "", pinCode: c.pinCode ?? "", timezone: c.timezone,
       },
@@ -31,11 +31,11 @@ export function ProfileStep({ status }: { status: StatusResponse }) {
   return (
     <div className="card p-6">
       <h2 className="text-lg font-bold">Tell us about your company</h2>
-      <p className="text-sm text-muted mt-1">This appears on payslips, letters and reports.</p>
+      <p className="text-sm text-muted mt-1">This appears on payslips, letters and reports — fields marked required must be filled to continue.</p>
       <div className="mt-5 mb-2">
         <LogoUploader logoUrl={status.company.logoUrl} uploadUrl="/onboarding/logo" onUploaded={() => qc.invalidateQueries({ queryKey: ["onboarding-status"] })} />
       </div>
-      <form className="mt-5" noValidate onSubmit={handleSubmit((v) => act.mutate({ method: "put", url: "/onboarding/profile", body: v }))}>
+      <form className="mt-5" noValidate onSubmit={handleSubmit((v) => act.mutate({ method: "put", url: "/onboarding/profile", body: v }, { onSuccess: onSaved }))}>
         <CompanyProfileForm register={register} errors={errors} setValue={setValue} />
         <div className="flex justify-end mt-6"><Button type="submit" size="lg" loading={act.isPending}>Continue</Button></div>
       </form>
