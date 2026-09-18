@@ -32,6 +32,7 @@ export async function assignPlan(opts: {
     branchLimit: plan.includedBranches + Math.max(0, (existing?.branchLimit ?? plan.includedBranches) - (existing ? (await planIncluded(existing.planId)).includedBranches : plan.includedBranches)),
     deviceLimit: plan.includedDevices,
     modules: plan.modules,
+    attendanceFeatures: plan.attendanceFeatures,
     basePrice: opts.billingCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice,
     additionalBranchTotal: existing?.additionalBranchTotal ?? "0",
     startsAt: now, endsAt: ends, updatedAt: now,

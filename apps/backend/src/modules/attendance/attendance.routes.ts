@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
+import path from "node:path";
+import fs from "node:fs";
+import crypto from "node:crypto";
+import multer from "multer";
 import { and, eq, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { attendance, attendanceLogs, employees, branches, shifts, designations, departments } from "../../db/schema.js";
+import { attendance, attendanceLogs, attendanceLive, attendanceCorrections, employees, branches, shifts, designations, departments } from "../../db/schema.js";
 import { asyncHandler, validate } from "../../common/handler.js";
 import { ok, created } from "../../common/response.js";
 import { notFound, badRequest, forbidden } from "../../common/errors.js";
@@ -12,7 +16,12 @@ import { requirePermission, requireModule, hasPermission } from "../../middlewar
 import { audit } from "../../common/audit.js";
 import { employeeScopeWhere } from "../../common/scope.js";
 import { fullName } from "../employees/employees.service.js";
-import { processCompanyDate, processEmployeeDay, reprocessAroundPunch, companyTz } from "./attendance.service.js";
+import { notify, usersWithPermission } from "../notifications/notify.service.js";
+import {
+  processCompanyDate, processEmployeeDay, reprocessAroundPunch, companyTz,
+  attendanceSettingsFor, saveAttendanceSettings, effectiveSettings,
+  selfCheckin, selfCheckout, selfBreakStart, selfResumeWork, selfHeartbeat, currentLive,
+} from "./attendance.service.js";
 import { ymd, addDays } from "./processor.js";
 
 const r = Router();
@@ -21,7 +30,7 @@ const dateRe = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const myEmployee = async (req: any) => { const [e] = await db.select().from(employees).where(and(eq(employees.companyId, req.tenant!.companyId), eq(employees.userId, req.user!.id))).limit(1); return e; };
 const distanceM = (lat1: number, lon1: number, lat2: number, lon2: number) => { const R = 6371000, p = Math.PI / 180; const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2 + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2; return 2 * R * Math.asin(Math.sqrt(a)); };
 
-// ---- Self: web/GPS/selfie punch (Section 46, 120, 121) ----
+// ---- Self: web/GPS/selfie punch (legacy, kept for compatibility — prefer /self/* below) ----
 r.post("/punch", validate(z.object({ latitude: z.number().optional(), longitude: z.number().optional(), selfieUrl: z.string().url().optional(), direction: z.enum(["in", "out"]).optional() })), asyncHandler(async (req, res) => {
   const me = await myEmployee(req);
   if (!me) throw badRequest("Your login is not linked to an employee record");
@@ -42,6 +51,151 @@ r.post("/punch", validate(z.object({ latitude: z.number().optional(), longitude:
   audit(req, "punch", "attendance_log", log.id, { source });
   created(res, log, "Punched at " + now.toLocaleTimeString("en-IN", { timeZone: await companyTz(me.companyId), hour: "2-digit", minute: "2-digit" }));
 }));
+
+// ---- Self: work-session engine (check-in/out, break, resume, heartbeat) ----
+const punchInput = z.object({ latitude: z.number().optional(), longitude: z.number().optional(), accuracy: z.number().optional(), selfieUrl: z.string().url().optional() });
+r.post("/self/checkin", validate(punchInput), asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) throw badRequest("Your login is not linked to an employee record");
+  const [br] = await db.select().from(branches).where(eq(branches.id, me.branchId)).limit(1);
+  if (!br) throw notFound("Branch not found");
+  const log = await selfCheckin(me, br, req.body as z.infer<typeof punchInput>, req.user!.id, req.ip);
+  audit(req, "checkin", "attendance_log", log.id, { source: log.source });
+  const admins = await usersWithPermission(me.companyId, "attendance.view");
+  await notify({ companyId: me.companyId, userIds: admins, type: "attendance.checkin", title: `${me.firstName} ${me.lastName} checked in`, priority: "info" });
+  created(res, log, "Checked in");
+}));
+r.post("/self/checkout", asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) throw badRequest("Your login is not linked to an employee record");
+  await selfCheckout(me, req.user!.id);
+  audit(req, "checkout", "employee", me.id);
+  const admins = await usersWithPermission(me.companyId, "attendance.view");
+  await notify({ companyId: me.companyId, userIds: admins, type: "attendance.checkout", title: `${me.firstName} ${me.lastName} checked out`, priority: "info" });
+  ok(res, null, "Checked out");
+}));
+r.post("/self/break/start", validate(z.object({ reason: z.enum(["manual", "lunch", "personal"]).default("manual") })), asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) throw badRequest("Your login is not linked to an employee record");
+  const log = await selfBreakStart(me, (req.body as { reason: "manual" | "lunch" | "personal" }).reason, req.user!.id);
+  audit(req, "break_start", "attendance_log", log.id, { reason: log.breakReason });
+  created(res, log, "Break started");
+}));
+r.post("/self/resume", asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) throw badRequest("Your login is not linked to an employee record");
+  const log = await selfResumeWork(me, req.user!.id);
+  audit(req, "resume", "attendance_log", log.id);
+  created(res, log, "Work resumed");
+}));
+// Cheap ping while the tab is active — no event content is ever recorded, only a timestamp watermark.
+r.post("/self/heartbeat", asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (me) await selfHeartbeat(me);
+  ok(res, null);
+}));
+r.get("/self/live", asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) return ok(res, null);
+  ok(res, await currentLive(me.id));
+}));
+
+// ---- Selfie upload (returns a URL to feed into /self/checkin) ----
+const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
+const selfieUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _f, cb) => { const d = path.join(UPLOAD_ROOT, req.tenant!.companyId, "attendance", "selfies"); fs.mkdirSync(d, { recursive: true }); cb(null, d); },
+    filename: (_req, f, cb) => cb(null, `${crypto.randomUUID()}${path.extname(f.originalname).toLowerCase() || ".jpg"}`),
+  }),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_r, f, cb) => cb(null, /^image\/(png|jpe?g|webp)$/.test(f.mimetype)),
+});
+r.post("/self/selfie", selfieUpload.single("file"), asyncHandler(async (req, res) => {
+  if (!req.file) throw badRequest("A selfie image is required (png/jpg/webp, max 3MB)");
+  ok(res, { url: `/api/v1/attendance/selfies/${req.tenant!.companyId}/${req.file.filename}` }, "Selfie uploaded");
+}));
+const SAFE_FILE = /^[A-Za-z0-9._-]+$/;
+r.get("/selfies/:companyId/:filename", asyncHandler(async (req, res) => {
+  if (req.params.companyId !== req.tenant!.companyId || !SAFE_FILE.test(req.params.filename)) throw forbidden();
+  const filePath = path.join(UPLOAD_ROOT, req.params.companyId, "attendance", "selfies", req.params.filename);
+  if (!fs.existsSync(filePath)) throw notFound("Not found");
+  res.sendFile(filePath);
+}));
+
+// ---- Company settings (Section 19/36) ----
+r.get("/settings", requirePermission("attendance.view"), asyncHandler(async (req, res) => {
+  ok(res, await attendanceSettingsFor(req.tenant!.companyId));
+}));
+r.put("/settings", requirePermission("attendance.approve"), validate(z.object({
+  selfCheckInEnabled: z.boolean().optional(), selfieRequired: z.boolean().optional(), gpsRequired: z.boolean().optional(),
+  defaultGeofenceRadiusM: z.coerce.number().int().min(0).optional(), gpsAccuracyLimitM: z.coerce.number().int().min(0).optional(),
+  activityTrackingEnabled: z.boolean().optional(), autoInactivityPauseEnabled: z.boolean().optional(), inactivityThresholdMinutes: z.coerce.number().int().min(1).optional(),
+  manualBreakEnabled: z.boolean().optional(), autoCheckoutEnabled: z.boolean().optional(), allowMultiDeviceSessions: z.boolean().optional(),
+})), asyncHandler(async (req, res) => {
+  const b = req.body as Record<string, unknown>;
+  const need: [keyof typeof b, string][] = [["selfCheckInEnabled", "selfCheckin"], ["gpsRequired", "gps"], ["selfieRequired", "selfie"], ["activityTrackingEnabled", "activityTracking"], ["autoInactivityPauseEnabled", "autoInactivityPause"]];
+  for (const [field, feature] of need) {
+    if (b[field] === true && !req.tenant!.attendanceFeatures.includes(feature)) throw forbidden(`Your plan does not include this feature. Upgrade to enable it.`);
+  }
+  const saved = await saveAttendanceSettings(req.tenant!.companyId, b);
+  audit(req, "update", "attendance_settings", req.tenant!.companyId, b);
+  ok(res, saved, "Attendance settings saved");
+}));
+r.get("/settings/branch/:branchId", requirePermission("attendance.view"), asyncHandler(async (req, res) => {
+  ok(res, await effectiveSettings(req.tenant!.companyId, req.params.branchId));
+}));
+r.put("/settings/branch/:branchId", requirePermission("attendance.approve"), validate(z.object({ overrides: z.record(z.unknown()) })), asyncHandler(async (req, res) => {
+  const b = req.body as { overrides: Record<string, unknown> };
+  const [br] = await db.update(branches).set({ settings: b.overrides, updatedAt: new Date() }).where(and(eq(branches.id, req.params.branchId), eq(branches.companyId, req.tenant!.companyId))).returning();
+  if (!br) throw notFound("Branch not found");
+  audit(req, "update", "branch_attendance_settings", br.id, b);
+  ok(res, br.settings, "Branch overrides saved");
+}));
+
+// ---- Admin: live status across employees (Section 18/40) ----
+r.get("/live", requirePermission("attendance.view"), asyncHandler(async (req, res) => {
+  const scope = await employeeScopeWhere(req, employees);
+  const rows = await db.select({
+    employeeId: employees.id, name: fullName, employeeCode: employees.employeeCode, branchName: branches.name,
+    status: attendanceLive.status, breakReason: attendanceLive.breakReason, since: attendanceLive.since, lastActivityAt: attendanceLive.lastActivityAt,
+  }).from(attendanceLive).innerJoin(employees, eq(employees.id, attendanceLive.employeeId)).leftJoin(branches, eq(branches.id, employees.branchId))
+    .where(and(eq(attendanceLive.companyId, req.tenant!.companyId), scope));
+  ok(res, rows);
+}));
+
+// ---- Attendance correction requests (Section 24) ----
+r.post("/corrections", validate(z.object({ date: dateRe, type: z.enum(["forgot_checkin", "forgot_checkout", "wrong_location", "device_problem", "network_problem", "timer_issue", "other"]), requestedCheckIn: z.coerce.date().optional(), requestedCheckOut: z.coerce.date().optional(), reason: z.string().min(3) })), asyncHandler(async (req, res) => {
+  const me = await myEmployee(req);
+  if (!me) throw badRequest("Your login is not linked to an employee record");
+  const b = req.body as { date: string; type: string; requestedCheckIn?: Date; requestedCheckOut?: Date; reason: string };
+  const [row] = await db.insert(attendanceCorrections).values({ companyId: me.companyId, employeeId: me.id, date: b.date, type: b.type as any, requestedCheckIn: b.requestedCheckIn, requestedCheckOut: b.requestedCheckOut, reason: b.reason }).returning();
+  audit(req, "create", "attendance_correction", row.id, { date: b.date, type: b.type });
+  const admins = await usersWithPermission(me.companyId, "attendance.approve");
+  await notify({ companyId: me.companyId, userIds: admins, type: "attendance.correction", title: `${me.firstName} ${me.lastName} requested an attendance correction`, link: "/app/attendance", priority: "warning" });
+  created(res, row, "Correction request submitted");
+}));
+r.get("/corrections", asyncHandler(async (req, res) => {
+  if (hasPermission(req, "attendance.approve")) {
+    ok(res, await db.select().from(attendanceCorrections).where(eq(attendanceCorrections.companyId, req.tenant!.companyId)).orderBy(desc(attendanceCorrections.createdAt)));
+  } else {
+    const me = await myEmployee(req);
+    ok(res, me ? await db.select().from(attendanceCorrections).where(eq(attendanceCorrections.employeeId, me.id)).orderBy(desc(attendanceCorrections.createdAt)) : []);
+  }
+}));
+r.post("/corrections/:id/decide", requirePermission("attendance.approve"), validate(z.object({ status: z.enum(["approved", "rejected"]), note: z.string().optional() })), asyncHandler(async (req, res) => {
+  const b = req.body as { status: "approved" | "rejected"; note?: string };
+  const [row] = await db.update(attendanceCorrections).set({ status: b.status, reviewedBy: req.user!.id, reviewedAt: new Date(), reviewNote: b.note }).where(and(eq(attendanceCorrections.id, req.params.id), eq(attendanceCorrections.companyId, req.tenant!.companyId))).returning();
+  if (!row) throw notFound("Correction request not found");
+  if (b.status === "approved" && (row.requestedCheckIn || row.requestedCheckOut)) {
+    const [emp] = await db.select({ branchId: employees.branchId }).from(employees).where(eq(employees.id, row.employeeId)).limit(1);
+    const work = row.requestedCheckIn && row.requestedCheckOut ? Math.round((row.requestedCheckOut.getTime() - row.requestedCheckIn.getTime()) / 60000) : undefined;
+    await db.insert(attendance).values({ companyId: row.companyId, branchId: emp?.branchId ?? "", employeeId: row.employeeId, date: row.date, status: "present", checkIn: row.requestedCheckIn, checkOut: row.requestedCheckOut, workMinutes: work ?? 0, isManual: true, remarks: `Correction approved: ${row.type}`, approvedBy: req.user!.id, source: "manual" })
+      .onConflictDoUpdate({ target: [attendance.employeeId, attendance.date], set: { checkIn: row.requestedCheckIn, checkOut: row.requestedCheckOut, workMinutes: work, isManual: true, remarks: `Correction approved: ${row.type}`, approvedBy: req.user!.id, updatedAt: new Date() } });
+  }
+  audit(req, b.status, "attendance_correction", row.id);
+  ok(res, row, `Correction ${b.status}`);
+}));
+
 r.get("/me", asyncHandler(async (req, res) => {
   const me = await myEmployee(req);
   if (!me) return ok(res, null);
@@ -49,7 +203,8 @@ r.get("/me", asyncHandler(async (req, res) => {
   const month = String(req.query.month ?? today.slice(0, 7));
   const rows = await db.select().from(attendance).where(and(eq(attendance.employeeId, me.id), gte(attendance.date, `${month}-01`), lte(attendance.date, `${month}-31`))).orderBy(attendance.date);
   const todayLogs = await db.select().from(attendanceLogs).where(and(eq(attendanceLogs.employeeId, me.id), gte(attendanceLogs.punchedAt, new Date(`${today}T00:00:00Z`)))).orderBy(attendanceLogs.punchedAt);
-  ok(res, { employeeId: me.id, today, rows, todayLogs });
+  const live = await currentLive(me.id);
+  ok(res, { employeeId: me.id, today, rows, todayLogs, live });
 }));
 
 // ---- Daily grid ----

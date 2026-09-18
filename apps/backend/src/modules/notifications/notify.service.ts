@@ -28,6 +28,10 @@ export const EVENTS: Record<string, { label: string; email: boolean; sms: boolea
   "payment.success": { label: "Payment received", email: true, sms: false, whatsapp: false },
   "payment.failed": { label: "Payment failed", email: true, sms: false, whatsapp: false },
   "subscription.renewed": { label: "Subscription renewed", email: true, sms: false, whatsapp: false },
+  "attendance.checkin": { label: "Employee checked in", email: false, sms: false, whatsapp: false },
+  "attendance.checkout": { label: "Employee checked out", email: false, sms: false, whatsapp: false },
+  "attendance.inactivity": { label: "Work timer auto-paused (inactivity)", email: false, sms: false, whatsapp: false },
+  "attendance.correction": { label: "Attendance correction requested", email: true, sms: false, whatsapp: false },
 };
 export async function settingsFor(companyId: string) {
   const [s] = await db.select().from(notificationSettings).where(eq(notificationSettings.companyId, companyId)).limit(1);

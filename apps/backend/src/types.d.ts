@@ -5,6 +5,7 @@ export type TenantContext = {
   companyId: string;
   branchIds: string[] | "all";
   modules: string[];
+  attendanceFeatures: string[];
   limits: { employees: number; branches: number; devices: number };
   subscriptionStatus: string;
 };

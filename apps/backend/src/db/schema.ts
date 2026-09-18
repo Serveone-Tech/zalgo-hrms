@@ -36,6 +36,9 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   additionalEmployeePrice: numeric("additional_employee_price", { precision: 12, scale: 2 }).notNull().default("0"),
   additionalDevicePrice: numeric("additional_device_price", { precision: 12, scale: 2 }).notNull().default("0"),
   modules: jsonb("modules").$type<string[]>().notNull().default([]),
+  // Fine-grained attendance capabilities gated per-plan (Section 35): "selfCheckin" | "gps" |
+  // "selfie" | "activityTracking" | "autoInactivityPause" | "desktopAgent"
+  attendanceFeatures: jsonb("attendance_features").$type<string[]>().notNull().default(["selfCheckin"]),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
@@ -79,6 +82,7 @@ export const subscriptions = pgTable("subscriptions", {
   branchLimit: integer("branch_limit").notNull(),
   deviceLimit: integer("device_limit").notNull(),
   modules: jsonb("modules").$type<string[]>().notNull().default([]),
+  attendanceFeatures: jsonb("attendance_features").$type<string[]>().notNull().default(["selfCheckin"]),
   basePrice: numeric("base_price", { precision: 12, scale: 2 }).notNull().default("0"),
   additionalBranchTotal: numeric("additional_branch_total", { precision: 12, scale: 2 }).notNull().default("0"),
   additionalEmployeeTotal: numeric("additional_employee_total", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -158,6 +162,7 @@ export const branches = pgTable("branches", {
   geofenceRadiusM: integer("geofence_radius_m"),
   status: branchStatusEnum("status").notNull().default("inactive"),
   approvedPrice: numeric("approved_price", { precision: 12, scale: 2 }).default("0"),
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}), // per-branch attendance overrides — falls back to company settings.attendance when absent
   ...timestamps,
 }, (t) => [index("branches_company_idx").on(t.companyId)]);
 
@@ -397,6 +402,10 @@ export const employeeStatusHistory = pgTable("employee_status_history", {
 // ---------- Phase 4: Attendance ----------
 export const attendanceStatusEnum = pgEnum("attendance_status", ["present", "absent", "half_day", "late", "early_out", "work_from_home", "on_leave", "holiday", "week_off", "missing_punch"]);
 export const attendanceSourceEnum = pgEnum("attendance_source", ["biometric", "face", "rfid", "web", "manual", "mobile", "gps", "selfie"]);
+export const breakReasonEnum = pgEnum("attendance_break_reason", ["inactivity", "manual", "lunch", "personal", "system"]);
+export const liveStatusEnum = pgEnum("attendance_live_status", ["working", "break", "offline"]);
+export const correctionTypeEnum = pgEnum("attendance_correction_type", ["forgot_checkin", "forgot_checkout", "wrong_location", "device_problem", "network_problem", "timer_issue", "other"]);
+export const correctionStatusEnum = pgEnum("attendance_correction_status", ["pending", "approved", "rejected"]);
 
 export const shifts = pgTable("shifts", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -451,6 +460,10 @@ export const attendanceLogs = pgTable("attendance_logs", {
   source: attendanceSourceEnum("source").notNull().default("manual"),
   latitude: numeric("latitude", { precision: 10, scale: 7 }), longitude: numeric("longitude", { precision: 10, scale: 7 }),
   selfieUrl: text("selfie_url"), ip: varchar("ip", { length: 60 }),
+  gpsAccuracyM: numeric("gps_accuracy_m", { precision: 8, scale: 2 }), distanceM: numeric("distance_m", { precision: 8, scale: 2 }), // captured at punch time for fraud review
+  // Set only on an "out" punch that is a break-start, not a real checkout — lets the existing
+  // in/out pairing in processor.ts double as session/break tracking with zero changes there.
+  breakReason: breakReasonEnum("break_reason"),
   dedupeKey: varchar("dedupe_key", { length: 160 }).notNull(),
   createdBy: uuid("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -474,6 +487,36 @@ export const attendance = pgTable("attendance", {
   remarks: text("remarks"), approvedBy: uuid("approved_by"),
   ...timestamps,
 }, (t) => [uniqueIndex("attendance_emp_date_idx").on(t.employeeId, t.date), index("attendance_company_date_idx").on(t.companyId, t.date)]);
+
+// Current live status — one row per employee, upserted. This is NOT the source of truth for
+// time totals (attendanceLogs + the existing in/out pairing in processor.ts already gives
+// exact session/break durations with zero changes to that logic); it exists purely so the
+// admin live dashboard and the inactivity-heartbeat job have an O(1) "what's happening right
+// now" lookup instead of re-deriving it from today's punches on every request.
+export const attendanceLive = pgTable("attendance_live", {
+  employeeId: uuid("employee_id").primaryKey().references(() => employees.id, { onDelete: "cascade" }),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull(),
+  status: liveStatusEnum("status").notNull().default("offline"),
+  breakReason: breakReasonEnum("break_reason"),
+  since: timestamp("since", { withTimezone: true }), // when the current status began
+  lastActivityAt: timestamp("last_activity_at", { withTimezone: true }), // heartbeat watermark, status = working only
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("attendance_live_company_status_idx").on(t.companyId, t.status)]);
+
+export const attendanceCorrections = pgTable("attendance_corrections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  date: varchar("date", { length: 10 }).notNull(),
+  type: correctionTypeEnum("type").notNull(),
+  requestedCheckIn: timestamp("requested_check_in", { withTimezone: true }),
+  requestedCheckOut: timestamp("requested_check_out", { withTimezone: true }),
+  reason: text("reason").notNull(),
+  status: correctionStatusEnum("status").notNull().default("pending"),
+  reviewedBy: uuid("reviewed_by"), reviewedAt: timestamp("reviewed_at", { withTimezone: true }), reviewNote: text("review_note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("attendance_corrections_emp_idx").on(t.employeeId, t.date), index("attendance_corrections_company_status_idx").on(t.companyId, t.status)]);
 
 // ---------- Phase 5: Hardware ----------
 export const deviceStatusEnum = pgEnum("device_status", ["online", "offline", "syncing", "error", "disabled"]);

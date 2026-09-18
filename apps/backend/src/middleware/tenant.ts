@@ -43,6 +43,7 @@ export const requireTenant = async (req: Request, _res: Response, next: NextFunc
     req.tenant = {
       companyId, branchIds,
       modules: sub.modules,
+      attendanceFeatures: sub.attendanceFeatures,
       limits: { employees: sub.employeeLimit, branches: sub.branchLimit, devices: sub.deviceLimit },
       subscriptionStatus: sub.status,
     };

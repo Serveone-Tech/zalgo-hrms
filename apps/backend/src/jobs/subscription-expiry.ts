@@ -24,7 +24,7 @@ export async function runSubscriptionExpiryCheck() {
     }
   }
 }
-import { processCompanyDate } from "../modules/attendance/attendance.service.js";
+import { processCompanyDate, runInactivityAutoPause, runStaleLiveCleanup } from "../modules/attendance/attendance.service.js";
 import { ymd, addDays } from "../modules/attendance/processor.js";
 // Section 109: daily attendance processing — har company ke liye kal + aaj (night shifts ke liye)
 export async function runAttendanceProcessing() {
@@ -72,10 +72,12 @@ export function startJobs() {
   setTimeout(() => runDailyEvents().catch((e) => console.error("daily events", e)), 30000); setInterval(() => runDailyEvents().catch((e) => console.error("daily events", e)), 60 * 60 * 1000);
   setTimeout(() => runLeaveAccrual().catch(() => {}), 20000); setInterval(() => runLeaveAccrual().catch(() => {}), 12 * 60 * 60 * 1000);
   setInterval(() => runDeviceOfflineCheck().catch((e) => console.error("device job", e)), 60 * 1000);
+  setInterval(() => runInactivityAutoPause().catch((e) => console.error("inactivity job", e)), 60 * 1000);
+  setInterval(() => runStaleLiveCleanup().catch((e) => console.error("stale live job", e)), 5 * 60 * 1000);
   const att = () => runAttendanceProcessing().catch((e) => console.error("attendance job", e));
   setTimeout(att, 15000); setInterval(att, 30 * 60 * 1000);
   const run = () => runSubscriptionExpiryCheck().catch((e) => console.error("expiry job", e));
   setTimeout(run, 5000);
   setInterval(run, 60 * 60 * 1000);
-  console.log("⏱  Jobs started: subscription expiry (hourly), attendance processing (30 min), device offline check (1 min), leave accrual (12 h), daily events (birthdays/docs)");
+  console.log("⏱  Jobs started: subscription expiry (hourly), attendance processing (30 min), device offline check (1 min), inactivity auto-pause (1 min), stale live cleanup (5 min), leave accrual (12 h), daily events (birthdays/docs)");
 }

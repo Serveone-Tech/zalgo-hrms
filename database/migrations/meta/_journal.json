@@ -15,6 +15,20 @@
       "when": 1788683052263,
       "tag": "0001_signup_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789718299270,
+      "tag": "0002_attendance_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789718935866,
+      "tag": "0003_attendance_features",
+      "breakpoints": true
     }
   ]
 }

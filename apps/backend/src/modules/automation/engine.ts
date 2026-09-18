@@ -19,6 +19,10 @@ export const TRIGGERS: Record<string, { label: string; fields: string[] }> = {
   "employee.anniversary": { label: "Work anniversary (daily)", fields: ["years"] },
   "payment.success": { label: "Payment received", fields: ["amount", "planName", "purpose"] },
   "payment.failed": { label: "Payment failed", fields: ["amount", "purpose"] },
+  "attendance.checkin": { label: "Employee checked in", fields: ["employeeName", "branchName"] },
+  "attendance.checkout": { label: "Employee checked out", fields: ["employeeName"] },
+  "attendance.inactivity": { label: "Work timer auto-paused (inactivity)", fields: ["employeeName"] },
+  "attendance.resumed": { label: "Work resumed after break/pause", fields: ["employeeName"] },
 };
 export type EventPayload = { companyId: string; employeeId?: string; [k: string]: unknown };
 

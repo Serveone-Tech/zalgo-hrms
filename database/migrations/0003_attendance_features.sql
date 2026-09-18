@@ -1,0 +1,2 @@
+ALTER TABLE "subscription_plans" ADD COLUMN "attendance_features" jsonb DEFAULT '["selfCheckin"]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "subscriptions" ADD COLUMN "attendance_features" jsonb DEFAULT '["selfCheckin"]'::jsonb NOT NULL;
