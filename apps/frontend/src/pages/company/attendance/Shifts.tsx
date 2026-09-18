@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useGet, useAction } from "@/lib/queries";
 import { useAuth } from "@/store/auth";
@@ -11,15 +11,20 @@ import type { Branch } from "../employees/types";
 
 export type Shift = { id: string; name: string; type: string; branchId: string | null; startTime: string; endTime: string; graceMinutes: number; minWorkMinutes: number; halfDayMinutes: number; lateAfterMinutes: number; earlyOutBeforeMinutes: number; overtimeAfterMinutes: number; weekOffDays: number[]; isDefault: boolean; isActive: boolean };
 type Holiday = { id: string; name: string; date: string; branchId: string | null; isOptional: boolean };
+type AttSettings = { selfCheckInEnabled: boolean; selfieRequired: boolean; gpsRequired: boolean; defaultGeofenceRadiusM: number; gpsAccuracyLimitM: number; activityTrackingEnabled: boolean; autoInactivityPauseEnabled: boolean; inactivityThresholdMinutes: number; manualBreakEnabled: boolean; autoCheckoutEnabled: boolean; allowMultiDeviceSessions: boolean };
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const blank: Omit<Shift, "id"> = { name: "", type: "general", branchId: null, startTime: "09:30", endTime: "18:30", graceMinutes: 10, minWorkMinutes: 480, halfDayMinutes: 240, lateAfterMinutes: 10, earlyOutBeforeMinutes: 10, overtimeAfterMinutes: 540, weekOffDays: [0], isDefault: false, isActive: true };
 
 export default function Shifts() {
   const can = useAuth((s) => s.can);
-  const [tab, setTab] = useState<"shifts" | "holidays">("shifts");
+  const [tab, setTab] = useState<"shifts" | "holidays" | "settings">("shifts");
   const shiftsQ = useGet<Shift[]>(["shifts"], "/shifts"); const branches = useGet<Branch[]>(["branches"], "/branches");
   const year = new Date().getFullYear(); const hol = useGet<Holiday[]>(["holidays", year], `/shifts/holidays?year=${year}`);
   const act = useAction([["shifts"], ["holidays", year]]);
+  const settingsQ = useGet<AttSettings>(["attendance-settings"], "/attendance/settings");
+  const settingsAct = useAction<Partial<AttSettings>>([["attendance-settings"]]);
+  const [cfg, setCfg] = useState<AttSettings | null>(null);
+  useEffect(() => { if (settingsQ.data?.data) setCfg(settingsQ.data.data); }, [settingsQ.data]);
   const [m, setM] = useState<(Partial<Shift> & Omit<Shift, "id">) | null>(null);
   const [assign, setAssign] = useState<{ shift: Shift; ids: string; from: string } | null>(null);
   const [h, setH] = useState<{ name: string; date: string; branchId: string; isOptional: boolean } | null>(null);
@@ -29,8 +34,34 @@ export default function Shifts() {
 
   return (
     <>
-      <PageHeader title="Shifts & holidays" sub="Timing rules the attendance engine applies." actions={can("attendance.create") && (tab === "shifts" ? <Button onClick={() => setM({ ...blank })}><Plus size={16} /> Shift</Button> : <Button onClick={() => setH({ name: "", date: "", branchId: "", isOptional: false })}><Plus size={16} /> Holiday</Button>)} />
-      <div className="flex gap-1 border-b border-line mb-5">{(["shifts", "holidays"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={cn("px-3 py-2 text-sm font-semibold border-b-2 -mb-px capitalize", tab === t ? "border-brand" : "border-transparent text-muted")}>{t}</button>)}</div>
+      <PageHeader title="Shifts & holidays" sub="Timing rules the attendance engine applies." actions={can("attendance.create") && (tab === "shifts" ? <Button onClick={() => setM({ ...blank })}><Plus size={16} /> Shift</Button> : tab === "holidays" ? <Button onClick={() => setH({ name: "", date: "", branchId: "", isOptional: false })}><Plus size={16} /> Holiday</Button> : null)} />
+      <div className="flex gap-1 border-b border-line mb-5">{(["shifts", "holidays", "settings"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={cn("px-3 py-2 text-sm font-semibold border-b-2 -mb-px capitalize", tab === t ? "border-brand" : "border-transparent text-muted")}>{t === "settings" ? "Self check-in" : t}</button>)}</div>
+      {tab === "settings" && (settingsQ.isLoading || !cfg ? <Loading /> : (
+        <div className="card p-5 max-w-2xl space-y-5">
+          <p className="text-sm text-muted">Controls the employee-facing "My attendance" self check-in screen — GPS, selfie, breaks and inactivity auto-pause. Features not in your subscription plan are disabled here.</p>
+          {([
+            ["selfCheckInEnabled", "Employee self check-in", "Employees can check in/out themselves from My attendance."],
+            ["gpsRequired", "GPS attendance", "Require location for every self check-in, even on branches without a geofence."],
+            ["selfieRequired", "Selfie attendance", "Require a selfie photo at check-in."],
+            ["manualBreakEnabled", "Manual break", "Let employees start/end a lunch or personal break."],
+            ["activityTrackingEnabled", "Activity tracking", "Detect mouse/keyboard activity while working (no content is ever recorded)."],
+            ["autoInactivityPauseEnabled", "Automatic inactivity pause", "Auto-pause the work timer after the inactivity threshold below (requires Activity tracking)."],
+            ["autoCheckoutEnabled", "Auto-checkout safety net", "Close a forgotten check-in left over from a previous day."],
+            ["allowMultiDeviceSessions", "Allow multiple active sessions", "Let an employee check in from more than one device at once."],
+          ] as const).map(([key, label, hint]) => (
+            <label key={key} className="flex items-start gap-3">
+              <input type="checkbox" className="mt-1" checked={cfg[key]} onChange={(e) => setCfg({ ...cfg, [key]: e.target.checked })} />
+              <span><span className="text-sm font-semibold block">{label}</span><span className="text-xs text-muted">{hint}</span></span>
+            </label>
+          ))}
+          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-line">
+            <Field label="Default geofence radius (meters)"><input className="field" type="number" min={0} value={cfg.defaultGeofenceRadiusM} onChange={(e) => setCfg({ ...cfg, defaultGeofenceRadiusM: Number(e.target.value) })} /></Field>
+            <Field label="GPS accuracy limit (meters)"><input className="field" type="number" min={0} value={cfg.gpsAccuracyLimitM} onChange={(e) => setCfg({ ...cfg, gpsAccuracyLimitM: Number(e.target.value) })} /></Field>
+            <Field label="Inactivity threshold (minutes)"><input className="field" type="number" min={1} value={cfg.inactivityThresholdMinutes} onChange={(e) => setCfg({ ...cfg, inactivityThresholdMinutes: Number(e.target.value) })} /></Field>
+          </div>
+          <div className="flex justify-end"><Button loading={settingsAct.isPending} onClick={() => settingsAct.mutate({ method: "put", url: "/attendance/settings", body: cfg })}>Save settings</Button></div>
+        </div>
+      ))}
       {tab === "shifts" && (shiftsQ.isLoading ? <Loading /> : !shiftsQ.data?.data?.length ? <Empty text="No shifts yet. Create a General shift and mark it default." /> : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{shiftsQ.data.data.map((s) => (
           <div key={s.id} className="card p-4">

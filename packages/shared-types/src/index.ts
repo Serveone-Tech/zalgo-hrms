@@ -46,6 +46,19 @@ export const MODULES = {
 export type ModuleKey = keyof typeof MODULES;
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
 
+// Fine-grained attendance capabilities gated per subscription plan (independent of the coarse
+// "attendance" module above, which just controls whether the Attendance nav/API exists at all).
+export const ATTENDANCE_FEATURES = {
+  selfCheckin: "Employee self check-in",
+  gps: "GPS attendance",
+  selfie: "Selfie attendance",
+  activityTracking: "Activity tracking",
+  autoInactivityPause: "Automatic inactivity pause",
+  desktopAgent: "Desktop activity agent",
+} as const;
+export type AttendanceFeatureKey = keyof typeof ATTENDANCE_FEATURES;
+export const ATTENDANCE_FEATURE_KEYS = Object.keys(ATTENDANCE_FEATURES) as AttendanceFeatureKey[];
+
 // ----- Permissions (resource.action) -----
 export const PERMISSIONS = [
   "company.view", "company.update", "company.settings",

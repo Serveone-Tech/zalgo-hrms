@@ -9,14 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { inr } from "@/lib/utils";
-import { MODULES, MODULE_KEYS, type ModuleKey } from "@hrms/shared-types";
+import { MODULES, MODULE_KEYS, ATTENDANCE_FEATURES, ATTENDANCE_FEATURE_KEYS, type ModuleKey } from "@hrms/shared-types";
 
-type Plan = { id: string; name: string; slug: string; description: string | null; monthlyPrice: string; yearlyPrice: string; trialDays: number; includedEmployees: number; includedBranches: number; includedDevices: number; additionalBranchPrice: string; additionalEmployeePrice: string; additionalDevicePrice: string; modules: string[]; isActive: boolean; sortOrder: number };
+type Plan = { id: string; name: string; slug: string; description: string | null; monthlyPrice: string; yearlyPrice: string; trialDays: number; includedEmployees: number; includedBranches: number; includedDevices: number; additionalBranchPrice: string; additionalEmployeePrice: string; additionalDevicePrice: string; modules: string[]; attendanceFeatures: string[]; isActive: boolean; sortOrder: number };
 const n = z.coerce.number().min(0);
 const schema = z.object({
   name: z.string().min(2), slug: z.string().min(2).regex(/^[a-z0-9-]+$/), description: z.string().optional(),
   monthlyPrice: n, yearlyPrice: n, trialDays: n.int(), includedEmployees: n.int().min(1), includedBranches: n.int().min(1), includedDevices: n.int(),
-  additionalBranchPrice: n, additionalEmployeePrice: n, additionalDevicePrice: n, modules: z.array(z.string()).min(1, "Select at least one module"), sortOrder: n.int(), isActive: z.boolean(),
+  additionalBranchPrice: n, additionalEmployeePrice: n, additionalDevicePrice: n, modules: z.array(z.string()).min(1, "Select at least one module"),
+  attendanceFeatures: z.array(z.string()).default([]), sortOrder: n.int(), isActive: z.boolean(),
 });
 type Form = z.infer<typeof schema>;
 
@@ -27,7 +28,7 @@ export default function Plans() {
   const form = useForm<Form>({ resolver: zodResolver(schema) });
   const openEdit = (p: Plan | "new") => {
     setEdit(p);
-    form.reset(p === "new" ? { modules: ["employees", "attendance", "leaves"], isActive: true, trialDays: 14, includedBranches: 1, includedEmployees: 25, includedDevices: 1, sortOrder: 0, monthlyPrice: 0, yearlyPrice: 0, additionalBranchPrice: 0, additionalEmployeePrice: 0, additionalDevicePrice: 0 }
+    form.reset(p === "new" ? { modules: ["employees", "attendance", "leaves"], attendanceFeatures: ["selfCheckin"], isActive: true, trialDays: 14, includedBranches: 1, includedEmployees: 25, includedDevices: 1, sortOrder: 0, monthlyPrice: 0, yearlyPrice: 0, additionalBranchPrice: 0, additionalEmployeePrice: 0, additionalDevicePrice: 0 }
       : { ...p, description: p.description ?? "", monthlyPrice: +p.monthlyPrice, yearlyPrice: +p.yearlyPrice, additionalBranchPrice: +p.additionalBranchPrice, additionalEmployeePrice: +p.additionalEmployeePrice, additionalDevicePrice: +p.additionalDevicePrice });
   };
   const { register, handleSubmit, formState: { errors } } = form;
@@ -57,6 +58,7 @@ export default function Plans() {
                 <div className="flex justify-between"><dt className="text-muted">Devices</dt><dd className="font-semibold">{p.includedDevices} <span className="text-muted font-normal">+{inr(p.additionalDevicePrice)}/extra</span></dd></div>
               </dl>
               <div className="mt-4 flex flex-wrap gap-1">{p.modules.map((m) => <span key={m} className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium">{MODULES[m as ModuleKey] ?? m}</span>)}</div>
+              {p.attendanceFeatures?.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{p.attendanceFeatures.map((f) => <span key={f} className="rounded bg-brand-soft text-brand px-1.5 py-0.5 text-[11px] font-medium">{ATTENDANCE_FEATURES[f as keyof typeof ATTENDANCE_FEATURES] ?? f}</span>)}</div>}
             </div>
           ))}
         </div>
@@ -73,6 +75,9 @@ export default function Plans() {
           <div className="grid sm:grid-cols-3 gap-4">{num("additionalEmployeePrice", "Extra employee ₹/mo")}{num("additionalBranchPrice", "Extra branch ₹/mo")}{num("additionalDevicePrice", "Extra device ₹/mo")}</div>
           <Field label="Modules included" error={errors.modules?.message}>
             <div className="grid sm:grid-cols-3 gap-2">{MODULE_KEYS.map((m) => <label key={m} className="flex items-center gap-2 text-sm rounded-md border border-line px-3 py-2"><input type="checkbox" value={m} {...register("modules")} />{MODULES[m]}</label>)}</div>
+          </Field>
+          <Field label="Attendance features (Section 35)">
+            <div className="grid sm:grid-cols-3 gap-2">{ATTENDANCE_FEATURE_KEYS.map((f) => <label key={f} className="flex items-center gap-2 text-sm rounded-md border border-line px-3 py-2"><input type="checkbox" value={f} {...register("attendanceFeatures")} />{ATTENDANCE_FEATURES[f]}</label>)}</div>
           </Field>
           <div className="grid sm:grid-cols-2 gap-4">{num("sortOrder", "Sort order")}<Field label="Status"><label className="flex items-center gap-2 h-10 text-sm"><input type="checkbox" {...register("isActive")} /> Active (visible to companies)</label></Field></div>
           <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button type="submit" loading={act.isPending}>Save plan</Button></div>

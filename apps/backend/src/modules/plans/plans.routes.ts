@@ -8,7 +8,7 @@ import { ok, created } from "../../common/response.js";
 import { notFound } from "../../common/errors.js";
 import { requireAuth, requireSuperAdmin } from "../../middleware/auth.js";
 import { audit } from "../../common/audit.js";
-import { MODULE_KEYS } from "@hrms/shared-types";
+import { MODULE_KEYS, ATTENDANCE_FEATURE_KEYS } from "@hrms/shared-types";
 
 const r = Router();
 const money = z.coerce.number().min(0);
@@ -26,6 +26,7 @@ const planSchema = z.object({
   additionalEmployeePrice: money.default(0),
   additionalDevicePrice: money.default(0),
   modules: z.array(z.enum(MODULE_KEYS as [string, ...string[]])),
+  attendanceFeatures: z.array(z.enum(ATTENDANCE_FEATURE_KEYS as [string, ...string[]])).default(["selfCheckin"]),
   isActive: z.boolean().default(true),
   sortOrder: z.coerce.number().int().default(0),
 });

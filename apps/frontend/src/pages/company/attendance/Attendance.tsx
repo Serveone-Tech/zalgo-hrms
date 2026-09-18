@@ -3,20 +3,32 @@ import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { useGet, useAction } from "@/lib/queries";
 import { useAuth } from "@/store/auth";
-import { PageHeader, Loading, Empty, Field } from "@/components/ui/page";
+import { PageHeader, Loading, Empty, Field, Stat } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { fmtDate } from "@/lib/utils";
-import { AttBadge, ATT_LABEL, hhmm, hrs, todayStr } from "./shared";
+import { AttBadge, ATT_LABEL, hhmm, hrs, todayStr, useElapsedSeconds, fmtHMS } from "./shared";
 import type { Branch, Dept } from "../employees/types";
 
 type Row = { employeeId: string; employeeCode: string; name: string; branchName: string | null; departmentName: string | null; designationName: string | null; id: string | null; status: string | null; checkIn: string | null; checkOut: string | null; workMinutes: number | null; lateMinutes: number | null; overtimeMinutes: number | null; punchCount: number | null; isManual: boolean | null; source: string | null; remarks: string | null; shiftName: string | null };
 type Log = { id: string; punchedAt: string; direction: string; source: string; ip: string | null };
+type LiveRow = { employeeId: string; name: string; employeeCode: string; branchName: string | null; status: "working" | "break"; breakReason: string | null; since: string | null; lastActivityAt: string | null };
+type Correction = { id: string; employeeId: string; date: string; type: string; reason: string; status: "pending" | "approved" | "rejected" };
+
+function LiveClock({ since }: { since: string | null }) {
+  return <span className="tabular-nums text-muted">{fmtHMS(useElapsedSeconds(since))}</span>;
+}
 
 export default function Attendance() {
   const can = useAuth((s) => s.can);
   const [date, setDate] = useState(todayStr()); const [branchId, setBranchId] = useState(""); const [departmentId, setDepartmentId] = useState(""); const [filter, setFilter] = useState("");
   const { data, isLoading } = useGet<{ date: string; rows: Row[]; summary: Record<string, number> }>(["attendance-daily", date, branchId, departmentId], `/attendance/daily?date=${date}&branchId=${branchId}&departmentId=${departmentId}`);
+  const isToday = date === todayStr();
+  const liveQ = useGet<LiveRow[]>(["attendance-live"], "/attendance/live", isToday);
+  const liveRows = liveQ.data?.data ?? [];
+  const corrections = useGet<Correction[]>(["attendance-corrections"], "/attendance/corrections", can("attendance.approve"));
+  const pendingCorrections = (corrections.data?.data ?? []).filter((c) => c.status === "pending");
+  const correctionAct = useAction([["attendance-corrections"], ["attendance-daily"]]);
   const branches = useGet<Branch[]>(["branches"], "/branches"); const depts = useGet<Dept[]>(["departments"], "/departments");
   const act = useAction([["attendance-daily"], ["company-dashboard"], ["att-logs"]]);
   const [sel, setSel] = useState<Row | null>(null);
@@ -29,6 +41,36 @@ export default function Attendance() {
   return (
     <>
       <PageHeader title="Attendance" sub={fmtDate(date)} actions={can("attendance.approve") && <Button variant="secondary" loading={act.isPending} onClick={() => act.mutate({ url: "/attendance/process", body: { date } })}><RefreshCw size={15} /> Recompute day</Button>} />
+      {isToday && (
+        <div className="mb-5">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-3">
+            <Stat label="Currently working" value={liveRows.filter((l) => l.status === "working").length} tone="good" />
+            <Stat label="On break" value={liveRows.filter((l) => l.status === "break").length} tone="warn" />
+            <Stat label="Checked out" value={(data?.data?.rows ?? []).filter((r) => r.checkOut && !liveRows.some((l) => l.employeeId === r.employeeId)).length} />
+            <Stat label="Not checked in" value={(data?.data?.rows ?? []).filter((r) => !r.checkIn).length} />
+          </div>
+          {liveRows.length > 0 && <div className="card divide-y divide-line">{liveRows.map((l) => (
+            <div key={l.employeeId} className="px-4 py-2 flex items-center justify-between text-sm">
+              <span className="font-medium">{l.name} <span className="text-xs text-muted font-normal">{l.branchName}</span></span>
+              <span className="flex items-center gap-2">{l.status === "working" ? "🟢 Working" : l.breakReason === "inactivity" ? "⏸ Inactive" : "☕ On break"} <LiveClock since={l.since} /></span>
+            </div>
+          ))}</div>}
+        </div>
+      )}
+      {pendingCorrections.length > 0 && (
+        <div className="mb-5">
+          <h3 className="font-bold text-sm mb-2">Correction requests awaiting review</h3>
+          <div className="card divide-y divide-line">{pendingCorrections.map((c) => (
+            <div key={c.id} className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span>{fmtDate(c.date)} — <span className="capitalize">{c.type.replace(/_/g, " ")}</span><span className="text-muted"> — {c.reason}</span></span>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="ghost" loading={correctionAct.isPending} onClick={() => correctionAct.mutate({ url: `/attendance/corrections/${c.id}/decide`, body: { status: "approved" } })}>Approve</Button>
+                <Button size="sm" variant="ghost" className="text-danger" loading={correctionAct.isPending} onClick={() => correctionAct.mutate({ url: `/attendance/corrections/${c.id}/decide`, body: { status: "rejected" } })}>Reject</Button>
+              </div>
+            </div>
+          ))}</div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 mb-4">
         <input className="field w-44" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <select className="field w-44" value={branchId} onChange={(e) => setBranchId(e.target.value)}><option value="">All branches</option>{branches.data?.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
