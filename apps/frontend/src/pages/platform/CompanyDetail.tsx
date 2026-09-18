@@ -1,4 +1,5 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { ScrollText } from "lucide-react";
 import { useState } from "react";
 import { useGet, useAction } from "@/lib/queries";
 import { PageHeader, Loading, Stat, Field } from "@/components/ui/page";
@@ -37,6 +38,7 @@ export default function CompanyDetail() {
     <>
       <PageHeader title={c.name} sub={`${c.slug}${c.city ? " · " + c.city : ""}${c.gstNumber ? " · GST " + c.gstNumber : ""}`}
         actions={<>
+          <Link to={`/platform/audit-logs?companyId=${c.id}`}><Button variant="secondary" size="sm"><ScrollText size={14} /> View audit log</Button></Link>
           {c.status !== "suspended" ? <Button variant="danger" size="sm" onClick={() => confirm("Suspend this company? Users will be locked out.") && act.mutate({ url: `/companies/${c.id}/status`, body: { status: "suspended" } })}>Suspend</Button>
             : <Button size="sm" onClick={() => act.mutate({ url: `/companies/${c.id}/status`, body: { status: "active" } })}>Reactivate</Button>}
         </>} />
