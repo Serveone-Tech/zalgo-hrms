@@ -65,7 +65,7 @@ pnpm dev
 |---|---|
 | Frontend | http://localhost:3000 |
 | Backend API | http://localhost:5000/api/v1 (health: http://localhost:5000/health) |
-| Hardware Agent | http://localhost:5001 (agent key ke bina exit hoga — normal hai, Section 6 dekho) |
+| Hardware Agent | http://localhost:5001 (agent key ke bina exit hoga — normal hai, Section 7 dekho) |
 
 ## 3. Pehla login aur company setup
 
@@ -122,7 +122,7 @@ RAZORPAY_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
 | SMS | Same page → MSG91 auth key, sender ID, DLT template |
 | WhatsApp | Same page → Interakt / MSG91 / generic webhook |
 | AI HR assistant | `apps/backend/.env` → `ANTHROPIC_API_KEY=sk-ant-...` (plan mein "Advanced Analytics" module chahiye) |
-| Biometric devices | Section 6 |
+| Biometric devices | Section 7 |
 
 ## 7. Biometric devices (hardware agent)
 
@@ -136,7 +136,23 @@ Agent ek chhota program hai jo devices wale network ke kisi bhi PC (Windows/Linu
    - **TCP (ZKTeco/eSSL 4370)**: agent folder mein `pnpm add node-zklib`; HRMS mein IP + port.
 5. Device par employees **Map** karo → **Push users**. Punches automatically attendance ban jayengi. Internet jaye to agent local queue mein rakhta hai.
 
-## 8. Production deploy
+### USB-only biometric devices (no Ethernet/WiFi)
+
+Kuch sasti fingerprint+RFID machines (jaise CP Plus ke "-U" variants) sirf USB/pendrive se data export karti hain, koi network port nahi hota. In devices ke saath live sync abhi possible nahi hai — ya to ek network-capable device lo, ya niche diya **Face kiosk** istemal karo (jo sirf ek purana Android/iOS phone/tablet mangta hai, koi naya hardware nahi).
+
+## 8. Face-recognition kiosk (shared phone/tablet, no biometric hardware needed)
+
+Ek purana Android/iOS phone ya tablet entrance par mount karke usse ek "kiosk" bana sakte ho — employees uske camera mein dekhenge aur system khud pehchan kar punch kar dega. Matching poori tarah **phone ke browser ke andar** hoti hai (`face-api.js`); koi photo HRMS server par upload nahi hoti jab tak punch actually confirm na ho.
+
+1. **Face recognition** attendance feature plan mein included honi chahiye (Super Admin → Plans).
+2. Ek naya role banao: **Roles → New role** → naam "Face Kiosk", permission sirf `attendance.kiosk` (ya "Face Kiosk" default role already seeded hai).
+3. Us role ke saath ek user banao (jaise `kiosk@yourcompany.com`), aur shared phone ke browser mein login karke `/kiosk` URL par jao (ya sidebar → **Face kiosk**). Login persist karne ke liye "remember me"/browser session chhod do, bookmark bana lo.
+4. Har employee ko enroll karo: **Employees → [employee] → Overview → Face recognition → Enroll** — ek baar saaf, seedhi photo camera se capture karo.
+5. Kiosk phone ko entrance par rakh do, screen on rakho. Employee saamne aayega → system naam dikha kar automatically punch kar dega (30 second cooldown per person, dobara turant punch nahi hoga).
+
+⚠️ **Limitation**: browser-based face recognition dedicated biometric hardware jitna accurate nahi hai (lighting/angle sensitive), aur abhi **liveness detection nahi hai** (photo dikhakar spoof possible hai) — high-security use ke liye dedicated hardware device behtar rahega.
+
+## 9. Production deploy
 
 ```bash
 # Server par (Ubuntu + Node 20 + pnpm)
@@ -155,7 +171,7 @@ cd apps/backend && NODE_ENV=production node dist/index.js      # ya pm2 start di
 - Redis + BullMQ chahiye to `src/queue/index.ts` same interface ke saath swap karo
 - Ek subdomain (Nginx + PM2) par frontend + API ek saath serve karne ke ready-made config: `deploy/nginx.hrms.conf`, `deploy/ecosystem.config.cjs`
 
-## 9. Commands
+## 10. Commands
 
 ```bash
 pnpm dev             # sab apps
@@ -169,7 +185,7 @@ pnpm db:studio       # DB GUI
 pnpm --filter @hrms/backend dev    # sirf backend
 ```
 
-## 10. Structure
+## 11. Structure
 
 ```
 hrms-saas/
@@ -183,7 +199,7 @@ hrms-saas/
 └── CLAUDE.md                Claude Code ke liye codebase rules
 ```
 
-## 11. Common problems
+## 12. Common problems
 
 | Problem | Fix |
 |---|---|

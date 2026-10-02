@@ -350,6 +350,8 @@ export const employees = pgTable("employees", {
   // ids
   panNumber: varchar("pan_number", { length: 20 }), aadhaarLast4: varchar("aadhaar_last4", { length: 4 }), uanNumber: varchar("uan_number", { length: 20 }), esiNumber: varchar("esi_number", { length: 20 }),
   deviceUserId: varchar("device_user_id", { length: 40 }), // biometric device mapping (Phase 5)
+  faceDescriptor: jsonb("face_descriptor").$type<number[]>(), // face-api.js 128-point embedding, for the face-recognition kiosk
+  faceEnrolledAt: timestamp("face_enrolled_at", { withTimezone: true }),
   ...timestamps,
 }, (t) => [index("employees_company_idx").on(t.companyId), index("employees_branch_idx").on(t.branchId), uniqueIndex("employees_code_idx").on(t.companyId, t.employeeCode)]);
 

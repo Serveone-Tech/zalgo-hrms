@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, Building2, CreditCard, Layers, GitPullRequest, ScrollText, Settings, LogOut, Menu, X, PackagePlus, Receipt,
-  MapPin, Users, ShieldCheck, UserSquare2, CalendarClock, CalendarDays, Wallet, Cpu, BarChart3, Lock, Network, Briefcase, Award, ReceiptIndianRupee, UserPlus, Target, LifeBuoy, Megaphone, Calendar, Zap, Sparkles,
+  MapPin, Users, ShieldCheck, UserSquare2, CalendarClock, CalendarDays, Wallet, Cpu, BarChart3, Lock, Network, Briefcase, Award, ReceiptIndianRupee, UserPlus, Target, LifeBuoy, Megaphone, Calendar, Zap, Sparkles, ScanFace,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -34,6 +34,7 @@ const companyNav: Item[] = [
   { to: "/app/designations", label: "Designations", icon: Award, module: "employees", perm: "designation.view" },
   { to: "/app/org", label: "Organization", icon: Network, module: "employees", perm: "employee.view" },
   { to: "/app/attendance/me", label: "My attendance", icon: CalendarClock, module: "attendance" },
+  { to: "/kiosk", label: "Face kiosk", icon: ScanFace, module: "attendance", perm: "attendance.kiosk" },
   { to: "/app/attendance", label: "Attendance", icon: CalendarClock, module: "attendance", perm: "attendance.view" },
   { to: "/app/shifts", label: "Shifts & holidays", icon: CalendarDays, module: "attendance", perm: "attendance.view" },
   { to: "/app/leaves", label: "Leave", icon: CalendarDays, module: "leaves" },

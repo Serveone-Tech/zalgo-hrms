@@ -100,6 +100,26 @@ r.get("/self/live", asyncHandler(async (req, res) => {
   ok(res, await currentLive(me.id));
 }));
 
+// ---- Face-recognition kiosk (shared device, logged in as a restricted "Face Kiosk" role) ----
+// Matching itself happens entirely in the kiosk's browser (face-api.js) — this endpoint only
+// records the punch the kiosk already decided on. It is not a self-service route: the employee
+// whose face matched never authenticated this request themselves.
+const kioskPunchSchema = z.object({ employeeId: z.string().uuid(), selfieUrl: z.string().url().optional(), confidence: z.number().min(0).max(1) });
+r.post("/kiosk/punch", requirePermission("attendance.kiosk"), validate(kioskPunchSchema), asyncHandler(async (req, res) => {
+  const b = req.body as z.infer<typeof kioskPunchSchema>;
+  const [emp] = await db.select().from(employees).where(and(eq(employees.id, b.employeeId), eq(employees.companyId, req.tenant!.companyId))).limit(1);
+  if (!emp) throw notFound("Employee not found");
+  const now = new Date();
+  const [log] = await db.insert(attendanceLogs).values({
+    companyId: emp.companyId, branchId: emp.branchId, employeeId: emp.id, punchedAt: now, direction: "unknown", source: "face",
+    selfieUrl: b.selfieUrl, ip: req.ip, dedupeKey: `${emp.id}|${Math.floor(now.getTime() / 60000)}`, createdBy: req.user!.id,
+  }).onConflictDoNothing().returning();
+  if (!log) throw badRequest("Already punched this minute", "DUPLICATE_PUNCH");
+  await reprocessAroundPunch(emp.companyId, emp.id, now);
+  audit(req, "kiosk_punch", "attendance_log", log.id, { employeeId: emp.id, confidence: b.confidence });
+  created(res, { employeeId: emp.id, name: `${emp.firstName} ${emp.lastName}`.trim(), punchedAt: now }, `Punched for ${emp.firstName}`);
+}));
+
 // ---- Selfie upload (returns a URL to feed into /self/checkin) ----
 const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 const selfieUpload = multer({

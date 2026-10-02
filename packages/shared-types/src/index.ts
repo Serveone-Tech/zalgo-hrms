@@ -69,7 +69,7 @@ export const PERMISSIONS = [
   "employee.view", "employee.create", "employee.update", "employee.delete", "employee.export",
   "department.view", "department.manage",
   "designation.view", "designation.manage",
-  "attendance.view", "attendance.create", "attendance.approve",
+  "attendance.view", "attendance.create", "attendance.approve", "attendance.kiosk",
   "leave.view", "leave.apply", "leave.approve",
   "payroll.view", "payroll.process", "payroll.approve",
   "device.view", "device.manage",
@@ -108,6 +108,9 @@ export const DEFAULT_COMPANY_ROLES: Record<string, { scope: DataScope; permissio
   "Payroll Manager": { scope: "company", permissions: ["employee.view", "attendance.view", "payroll.view", "payroll.process", "payroll.approve"] },
   "Department Manager": { scope: "department", permissions: ["employee.view", "attendance.view", "leave.view", "leave.approve", "expense.view", "expense.approve", "expense.submit", "performance.view", "performance.manage", "helpdesk.view"] },
   "Employee": { scope: "own", permissions: ["attendance.view", "leave.view", "leave.apply", "expense.submit", "performance.view", "helpdesk.view"] },
+  // Login this role on the shared kiosk phone only — it can submit face-matched punches for
+  // any employee but can't see payroll, leave, or anything else.
+  "Face Kiosk": { scope: "company", permissions: ["attendance.kiosk"] },
 };
 
 // ----- Auth payloads -----

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,8 @@ import { EmployeeLeave } from "../leaves/EmployeeLeave";
 import { SalaryTab } from "../payroll/SalaryTab";
 import { GoalsPanel } from "../hr/Performance";
 import { useAuth as useAuthStore } from "@/store/auth";
+// face-api.js (~700kB incl. tensorflow.js) must only load when the enroll modal actually opens.
+const FaceEnrollCapture = lazy(() => import("@/components/company/FaceEnrollCapture").then((m) => ({ default: m.FaceEnrollCapture })));
 
 const tabs = ["Overview", "Personal", "Bank", "Salary", "Documents", "Attendance", "Leave", "Goals", "History"] as const;
 const Row = ({ l, v }: { l: string; v?: React.ReactNode }) => <div className="flex justify-between gap-4 py-2 text-sm border-b border-line/60 last:border-0"><dt className="text-muted">{l}</dt><dd className="text-right font-medium">{v || "—"}</dd></div>;
@@ -33,6 +35,7 @@ export default function EmployeeProfile() {
   const [edit, setEdit] = useState(false); const [statusM, setStatusM] = useState<{ status: string; note: string; effectiveDate: string } | null>(null);
   const [transfer, setTransfer] = useState<{ toBranchId: string; toDepartmentId: string; transferDate: string; reason: string } | null>(null);
   const [docM, setDocM] = useState(false); const fileRef = useRef<HTMLInputElement>(null); const [docMeta, setDocMeta] = useState({ type: "other", title: "", expiryDate: "" }); const [uploading, setUploading] = useState(false);
+  const [faceM, setFaceM] = useState(false);
   const bank = useForm<Record<string, string>>();
   if (isLoading || !data?.data) return <Loading />;
   const e = data.data;
@@ -64,7 +67,12 @@ export default function EmployeeProfile() {
       <div className="flex gap-1 border-b border-line mb-5">{tabs.map((t) => <button key={t} onClick={() => setTab(t)} className={cn("px-3 py-2 text-sm font-semibold border-b-2 -mb-px", tab === t ? "border-brand text-ink" : "border-transparent text-muted hover:text-ink")}>{t}{t === "Documents" && e.documents.length ? ` (${e.documents.length})` : ""}</button>)}</div>
 
       {tab === "Overview" && <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-5"><h3 className="font-bold mb-2">Contact</h3><dl><Row l="Email" v={e.email} /><Row l="Mobile" v={e.mobile} /><Row l="Login" v={e.userId ? <Badge status="active">Enabled</Badge> : "No login"} /><Row l="Device user ID" v={e.deviceUserId} /></dl></div>
+        <div className="card p-5"><h3 className="font-bold mb-2">Contact</h3><dl><Row l="Email" v={e.email} /><Row l="Mobile" v={e.mobile} /><Row l="Login" v={e.userId ? <Badge status="active">Enabled</Badge> : "No login"} /><Row l="Device user ID" v={e.deviceUserId} />
+          <Row l="Face recognition" v={<span className="flex items-center gap-2">{e.faceEnrolledAt ? <Badge status="active">Enrolled</Badge> : <Badge status="disabled">Not enrolled</Badge>}
+            {can("employee.update") && <Button size="sm" variant="ghost" onClick={() => setFaceM(true)}>{e.faceEnrolledAt ? "Re-enroll" : "Enroll"}</Button>}
+            {can("employee.update") && e.faceEnrolledAt && <Button size="sm" variant="ghost" className="text-danger" onClick={() => act.mutate({ method: "delete", url: `/employees/${e.id}/face` })}>Remove</Button>}
+          </span>} />
+        </dl></div>
         <div className="card p-5"><h3 className="font-bold mb-2">Employment</h3><dl><Row l="Joined" v={fmtDate(e.joiningDate)} /><Row l="Reports to" v={e.managerName} /><Row l="Probation ends" v={fmtDate(e.probationEndDate)} /><Row l="Exit date" v={fmtDate(e.exitDate)} /></dl></div>
         <div className="card p-5"><h3 className="font-bold mb-2">Direct reports ({e.reports.length})</h3>{e.reports.length ? <ul className="text-sm space-y-1.5">{e.reports.map((r) => <li key={r.id}><Link to={`/app/employees/${r.id}`} className="font-medium hover:text-brand">{r.name}</Link> <span className="text-muted">{r.designationName ?? ""}</span></li>)}</ul> : <p className="text-sm text-muted">No one reports to {e.firstName}.</p>}</div>
       </div>}
@@ -121,6 +129,12 @@ export default function EmployeeProfile() {
         <Field label="File (PDF, image, Word · max 10 MB)"><input ref={fileRef} type="file" className="text-sm" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" /></Field>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setDocM(false)}>Cancel</Button><Button loading={uploading} onClick={uploadDoc}>Upload</Button></div>
       </div></Modal>
+      <Modal open={faceM} onClose={() => setFaceM(false)} title={`Enroll ${e.firstName}'s face`}>
+        <p className="text-sm text-muted mb-3">Look straight at the camera in good lighting. Only one reference capture is needed.</p>
+        <Suspense fallback={<p className="text-sm text-muted text-center">Loading camera…</p>}>
+          <FaceEnrollCapture onCaptured={(descriptor) => act.mutate({ url: `/employees/${e.id}/face`, body: { descriptor } }, { onSuccess: () => setFaceM(false) })} />
+        </Suspense>
+      </Modal>
       {!can("employee.view") && nav("/app")}
     </>
   );

@@ -68,6 +68,13 @@ r.get("/org-tree", requirePermission("employee.view"), asyncHandler(async (req, 
 r.get("/managers", requirePermission("employee.view"), asyncHandler(async (req, res) => {
   ok(res, await db.select({ id: employees.id, name: fullName, employeeCode: employees.employeeCode }).from(employees).where(and(eq(employees.companyId, req.tenant!.companyId), sql`${employees.status} not in ('resigned','terminated')`)).orderBy(employees.firstName));
 }));
+// Kiosk downloads every enrolled descriptor once and matches locally — the server never does
+// the face comparison itself, so no photo needs to be sent anywhere during matching.
+r.get("/face-descriptors", requirePermission("attendance.kiosk"), asyncHandler(async (req, res) => {
+  const rows = await db.select({ id: employees.id, name: fullName, employeeCode: employees.employeeCode, descriptor: employees.faceDescriptor })
+    .from(employees).where(and(eq(employees.companyId, req.tenant!.companyId), sql`${employees.faceDescriptor} is not null`, sql`${employees.status} not in ('resigned','terminated')`));
+  ok(res, rows);
+}));
 
 // ---- create ----
 r.post("/", requirePermission("employee.create"), validate(employeeSchema), asyncHandler(async (req, res) => {
@@ -148,6 +155,19 @@ r.post("/:id/transfer", requirePermission("employee.update"), validate(transferS
   if (e.userId) await db.update(users).set({ branchId: b.toBranchId }).where(eq(users.id, e.userId));
   audit(req, "transfer", "employee", e.id, { from: e.branchId, to: b.toBranchId }); ok(res, t, "Employee transferred");
 }));
+r.post("/:id/face", requirePermission("employee.update"), validate(z.object({ descriptor: z.array(z.number()).length(128) })), asyncHandler(async (req, res) => {
+  const e = await loadScoped(req, req.params.id);
+  const b = req.body as { descriptor: number[] };
+  await db.update(employees).set({ faceDescriptor: b.descriptor, faceEnrolledAt: new Date(), updatedAt: new Date() }).where(eq(employees.id, e.id));
+  audit(req, "face_enroll", "employee", e.id);
+  ok(res, null, "Face enrolled");
+}));
+r.delete("/:id/face", requirePermission("employee.update"), asyncHandler(async (req, res) => {
+  const e = await loadScoped(req, req.params.id);
+  await db.update(employees).set({ faceDescriptor: null, faceEnrolledAt: null, updatedAt: new Date() }).where(eq(employees.id, e.id));
+  audit(req, "face_unenroll", "employee", e.id);
+  ok(res, null, "Face enrollment removed");
+}));
 r.delete("/:id", requirePermission("employee.delete"), asyncHandler(async (req, res) => {
   const e = await loadScoped(req, req.params.id);
   await db.delete(employees).where(eq(employees.id, e.id));
@@ -155,6 +175,7 @@ r.delete("/:id", requirePermission("employee.delete"), asyncHandler(async (req, 
   audit(req, "delete", "employee", e.id, { employeeCode: e.employeeCode }); ok(res, null, "Employee deleted");
 }));
 
+// ---- face recognition enrollment (kiosk check-in) ----
 // ---- documents (Section 44, 108) ----
 r.post("/:id/documents", requirePermission("employee.update"), upload.single("file"), asyncHandler(async (req, res) => {
   const e = await loadScoped(req, req.params.id);

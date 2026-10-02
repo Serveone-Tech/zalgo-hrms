@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "@/store/auth";
 import { AppLayout } from "@/layouts/AppLayout";
@@ -28,6 +29,8 @@ import OrgTree from "@/pages/company/employees/OrgTree";
 import Shifts from "@/pages/company/attendance/Shifts";
 import Attendance from "@/pages/company/attendance/Attendance";
 import MyAttendance from "@/pages/company/attendance/MyAttendance";
+// face-api.js (~700kB incl. tensorflow.js) must only load for the kiosk, not every user.
+const Kiosk = lazy(() => import("@/pages/company/attendance/Kiosk"));
 import Devices from "@/pages/company/Devices";
 import Leaves from "@/pages/company/leaves/Leaves";
 import Payroll from "@/pages/company/payroll/Payroll";
@@ -60,6 +63,7 @@ export function AppRoutes() {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/kiosk" element={<Guard type="company_user"><Suspense fallback={<div className="min-h-screen grid place-items-center text-sm text-muted">Loading kiosk…</div>}><Kiosk /></Suspense></Guard>} />
       <Route path="/platform" element={<Guard type="super_admin"><AppLayout /></Guard>}>
         <Route index element={<PlatformDashboard />} />
         <Route path="companies" element={<Companies />} />
